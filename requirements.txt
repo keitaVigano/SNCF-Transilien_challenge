@@ -1,0 +1,5 @@
+# Requires Python 3.12
+pandas==3.0.5
+torch==2.14.0
+pyyaml==6.0.3
+numpy==2.5.1

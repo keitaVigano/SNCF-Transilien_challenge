@@ -220,5 +220,10 @@ __marimo__/
 # Data
 *.csv
 
+# Model checkpoints
+checkpoints/
+
 # DSstore
 .DS_Store
+
+*.ipynb

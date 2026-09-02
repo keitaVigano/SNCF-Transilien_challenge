@@ -1,0 +1,49 @@
+# Configuration for the Shallow Extreme Learning Machine (SELM) pipeline
+# for train delay prediction (SNCF Transilien challenge).
+#
+# SELM reference: Oneto et al., "Train Delay Prediction Systems: A Big Data
+# Analytics Perspective", Big Data Research (2018), Section 3.1.
+
+seed: 42
+
+data:
+  x_train_path: x_train_final.csv
+  y_train_path: y_train_final_j5KGWWK.csv
+  x_test_path: x_test_final.csv
+  target_col: p0q0
+  # High-cardinality "train" id is intentionally excluded by default: it does
+  # not generalize across rows and would blow up the embedding table. Add it
+  # here if you want to try it anyway.
+  categorical_cols: [gare]
+  numeric_cols: [arret, p2q0, p3q0, p4q0, p0q2, p0q3, p0q4]
+  date_col: date
+  use_date_features: true   # derive day-of-week (embedded) + is_weekend (numeric) from date_col
+  val_fraction: 0.2         # fraction of the *most recent* dates held out for validation
+  num_workers: 0
+
+model:
+  embedding_dim: 8
+  hidden_dim: 512
+  activation: tanh          # tanh | sigmoid | relu
+  hidden_init: uniform      # uniform | normal
+  hidden_init_range: [-1.0, 1.0]   # bounds for uniform, std for normal
+
+train:
+  # closed_form solves Eq.(8) of the paper in one shot (pure SELM: only the
+  # frozen-hidden-layer activations are used, embeddings are also frozen).
+  # sgd trains the output layer (and embeddings) with mini-batch gradient
+  # descent, matching Algorithm 1 of the paper.
+  solver: sgd
+  batch_size: 2048
+  epochs: 30
+  lr: 0.01
+  optimizer: adam           # adam | sgd
+  weight_decay: 1.0e-4      # L2 regularization, matches lambda in Eq.(7)
+  ridge_lambda: 1.0         # lambda used by the closed_form solver
+  device: auto              # auto | cpu | cuda
+  early_stopping_patience: 5
+  log_every: 50
+
+output:
+  checkpoint_dir: checkpoints
+  predictions_path: predictions.csv
