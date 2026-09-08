@@ -23,7 +23,7 @@ data:
 
 model:
   embedding_dim: 8
-  hidden_dim: 512
+  hidden_dim: 2048
   activation: tanh          # tanh | sigmoid | relu
   hidden_init: uniform      # uniform | normal
   hidden_init_range: [-1.0, 1.0]   # bounds for uniform, std for normal
@@ -34,9 +34,9 @@ train:
   # sgd trains the output layer (and embeddings) with mini-batch gradient
   # descent, matching Algorithm 1 of the paper.
   solver: sgd
-  batch_size: 2048
-  epochs: 30
-  lr: 0.01
+  batch_size: 4096
+  epochs: 1
+  lr: 0.003
   optimizer: adam           # adam | sgd
   weight_decay: 1.0e-4      # L2 regularization, matches lambda in Eq.(7)
   ridge_lambda: 1.0         # lambda used by the closed_form solver
@@ -45,5 +45,5 @@ train:
   log_every: 50
 
 output:
-  checkpoint_dir: checkpoints
-  predictions_path: predictions.csv
+  models_dir: models
+  predictions_filename: predictions.csv

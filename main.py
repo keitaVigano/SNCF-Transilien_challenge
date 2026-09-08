@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import shutil
 
 import pandas as pd
 from torch.utils.data import DataLoader
@@ -16,9 +17,8 @@ from torch.utils.data import DataLoader
 from dataset import Preprocessor, TransilienDelayDataset, chronological_split
 from model import SELM
 from trainer import Trainer
-from utils import get_device, load_config, set_seed
+from utils import get_device, load_config, make_run_dir, set_seed, setup_logging
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -31,6 +31,12 @@ def _read_features(path: str) -> pd.DataFrame:
 def main(config_path: str) -> None:
     cfg = load_config(config_path)
     set_seed(cfg["seed"])
+
+    run_dir = make_run_dir(cfg["output"]["models_dir"])
+    setup_logging(run_dir)
+    shutil.copy(config_path, run_dir / "config.yaml")
+    logger.info("Run directory: %s", run_dir)
+
     device = get_device(cfg["train"]["device"])
     logger.info("Using device: %s", device)
 
@@ -70,7 +76,7 @@ def main(config_path: str) -> None:
         hidden_init_range=tuple(model_cfg["hidden_init_range"]),
     )
 
-    trainer = Trainer(model, device, cfg["train"], cfg["output"]["checkpoint_dir"])
+    trainer = Trainer(model, device, cfg["train"], run_dir)
 
     solver = cfg["train"]["solver"]
     if solver == "closed_form":
@@ -89,8 +95,9 @@ def main(config_path: str) -> None:
 
     predictions = trainer.predict(test_loader)
     submission = pd.DataFrame({target_col: predictions}, index=x_test.index)
-    submission.to_csv(cfg["output"]["predictions_path"])
-    logger.info("Wrote predictions to %s", cfg["output"]["predictions_path"])
+    predictions_path = run_dir / cfg["output"]["predictions_filename"]
+    submission.to_csv(predictions_path)
+    logger.info("Wrote predictions to %s", predictions_path)
 
 
 if __name__ == "__main__":

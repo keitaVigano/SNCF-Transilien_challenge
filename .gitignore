@@ -220,8 +220,8 @@ __marimo__/
 # Data
 *.csv
 
-# Model checkpoints
-checkpoints/
+# Trained models (timestamped run folders)
+models/
 
 # DSstore
 .DS_Store
