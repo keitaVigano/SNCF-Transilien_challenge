@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+from metrics_logger import MetricsLogger
 from model import SELM
 from utils import mae, rmse, save_checkpoint
 
@@ -30,6 +31,7 @@ class Trainer:
         self.device = device
         self.cfg = train_cfg
         self.checkpoint_dir = Path(checkpoint_dir)
+        self.metrics = MetricsLogger(self.checkpoint_dir, use_tensorboard=train_cfg.get("use_tensorboard", True))
 
     def _make_optimizer(self) -> torch.optim.Optimizer:
         params = [p for p in self.model.parameters() if p.requires_grad]
@@ -51,6 +53,11 @@ class Trainer:
         self.model.freeze_embeddings()
         self.model.closed_form_fit(train_loader, ridge_lambda=self.cfg["ridge_lambda"], device=self.device)
         save_checkpoint(self.model, self.checkpoint_dir / "selm_closed_form.pt")
+
+        train_mae, train_rmse = self.evaluate(train_loader)
+        self.metrics.log_many({"mae": train_mae, "rmse": train_rmse}, step=0, epoch=0, phase="train")
+        logger.info("Closed-form fit done: train MAE=%.4f RMSE=%.4f", train_mae, train_rmse)
+        self.metrics.close()
 
     def fit_sgd(self, train_loader: DataLoader, val_loader: DataLoader) -> None:
         optimizer = self._make_optimizer()
@@ -77,11 +84,20 @@ class Trainer:
                 if step % self.cfg["log_every"] == 0:
                     logger.info("epoch %d step %d: train MSE=%.4f", epoch, step, running_loss / step)
 
+            # Everything below is logged once per epoch (step=epoch), not once
+            # per batch, so every metric/loss/lr curve shares the same x-axis.
+            train_mse = running_loss / max(1, len(train_loader))
             val_mae, val_rmse = self.evaluate(val_loader)
+            val_mse = val_rmse**2
+            # Same tag group ("loss") for both -> one overlaid chart in TensorBoard
+            # instead of two separate ones.
+            self.metrics.log_group("loss", {"train": train_mse, "val": val_mse}, step=epoch, epoch=epoch)
+            self.metrics.log_many({"mae": val_mae, "rmse": val_rmse}, step=epoch, epoch=epoch, phase="val")
+            self.metrics.log("lr", optimizer.param_groups[0]["lr"], step=epoch, epoch=epoch, phase="train")
             logger.info(
                 "epoch %d done: train MSE=%.4f val MAE=%.4f val RMSE=%.4f",
                 epoch,
-                running_loss / max(1, len(train_loader)),
+                train_mse,
                 val_mae,
                 val_rmse,
             )
@@ -99,6 +115,7 @@ class Trainer:
         if best_state is not None:
             self.model.load_state_dict(best_state)
         save_checkpoint(self.model, self.checkpoint_dir / "selm_sgd.pt")
+        self.metrics.close()
 
     @torch.no_grad()
     def evaluate(self, loader: DataLoader) -> tuple[float, float]:

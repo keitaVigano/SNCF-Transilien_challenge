@@ -43,6 +43,7 @@ train:
   device: auto              # auto | cpu | cuda
   early_stopping_patience: 5
   log_every: 50
+  use_tensorboard: true      # also mirror metrics.csv into TensorBoard event files
 
 output:
   models_dir: models
