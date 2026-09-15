@@ -81,11 +81,10 @@ class Trainer:
                 optimizer.step()
 
                 running_loss += loss.item()
-                if step % self.cfg["log_every"] == 0:
-                    logger.info("epoch %d step %d: train MSE=%.4f", epoch, step, running_loss / step)
 
-            # Everything below is logged once per epoch (step=epoch), not once
-            # per batch, so every metric/loss/lr curve shares the same x-axis.
+            # Everything below -- both the metrics.csv/TensorBoard logging and
+            # the console/file log line -- happens once per epoch, not once
+            # per batch/step.
             train_mse = running_loss / max(1, len(train_loader))
             val_mae, val_rmse = self.evaluate(val_loader)
             val_mse = val_rmse**2
@@ -105,6 +104,10 @@ class Trainer:
             if val_mae < best_val_mae:
                 best_val_mae = val_mae
                 best_state = copy.deepcopy(self.model.state_dict())
+                # Save as soon as we improve, not just at the end: if the run
+                # gets interrupted (Ctrl+C, crash) mid-training, the best
+                # checkpoint seen so far is still safely on disk.
+                save_checkpoint(self.model, self.checkpoint_dir / "selm_sgd.pt")
                 epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
@@ -114,7 +117,6 @@ class Trainer:
 
         if best_state is not None:
             self.model.load_state_dict(best_state)
-        save_checkpoint(self.model, self.checkpoint_dir / "selm_sgd.pt")
         self.metrics.close()
 
     @torch.no_grad()

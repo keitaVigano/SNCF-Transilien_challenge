@@ -28,18 +28,11 @@ def _read_features(path: str) -> pd.DataFrame:
     return df
 
 
-def main(config_path: str) -> None:
-    cfg = load_config(config_path)
-    set_seed(cfg["seed"])
-
-    run_dir = make_run_dir(cfg["output"]["models_dir"])
-    setup_logging(run_dir)
-    shutil.copy(config_path, run_dir / "config.yaml")
-    logger.info("Run directory: %s", run_dir)
-
-    device = get_device(cfg["train"]["device"])
-    logger.info("Using device: %s", device)
-
+def load_datasets(cfg: dict) -> tuple[Preprocessor, TransilienDelayDataset, TransilienDelayDataset]:
+    """Reads x_train/y_train, splits chronologically, and fits/applies the
+    Preprocessor. Shared by main.py (one real run) and tune.py (many trials
+    against the same data).
+    """
     data_cfg = cfg["data"]
 
     x_train_full = _read_features(data_cfg["x_train_path"])
@@ -59,14 +52,22 @@ def main(config_path: str) -> None:
     target_col = data_cfg["target_col"]
     train_ds = TransilienDelayDataset.from_dataframe(train_df, preprocessor, target_col)
     val_ds = TransilienDelayDataset.from_dataframe(val_df, preprocessor, target_col)
+    return preprocessor, train_ds, val_ds
 
+
+def build_loaders(
+    cfg: dict, train_ds: TransilienDelayDataset, val_ds: TransilienDelayDataset
+) -> tuple[DataLoader, DataLoader]:
     batch_size = cfg["train"]["batch_size"]
-    num_workers = data_cfg["num_workers"]
+    num_workers = cfg["data"]["num_workers"]
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    return train_loader, val_loader
 
+
+def build_model(cfg: dict, preprocessor: Preprocessor) -> SELM:
     model_cfg = cfg["model"]
-    model = SELM(
+    return SELM(
         numeric_dim=len(preprocessor.all_numeric_cols),
         cardinalities=preprocessor.cardinalities_,
         embedding_dim=model_cfg["embedding_dim"],
@@ -76,6 +77,24 @@ def main(config_path: str) -> None:
         hidden_init_range=tuple(model_cfg["hidden_init_range"]),
     )
 
+
+def main(config_path: str) -> None:
+    cfg = load_config(config_path)
+    set_seed(cfg["seed"])
+
+    run_dir = make_run_dir(cfg["output"]["models_dir"])
+    setup_logging(run_dir)
+    shutil.copy(config_path, run_dir / "config.yaml")
+    logger.info("Run directory: %s", run_dir)
+
+    device = get_device(cfg["train"]["device"])
+    logger.info("Using device: %s", device)
+
+    data_cfg = cfg["data"]
+    preprocessor, train_ds, val_ds = load_datasets(cfg)
+    train_loader, val_loader = build_loaders(cfg, train_ds, val_ds)
+
+    model = build_model(cfg, preprocessor)
     trainer = Trainer(model, device, cfg["train"], run_dir)
 
     solver = cfg["train"]["solver"]
@@ -89,9 +108,12 @@ def main(config_path: str) -> None:
     val_mae, val_rmse = trainer.evaluate(val_loader)
     logger.info("Final validation MAE=%.4f RMSE=%.4f", val_mae, val_rmse)
 
+    target_col = data_cfg["target_col"]
     x_test = _read_features(data_cfg["x_test_path"])
     test_ds = TransilienDelayDataset.from_dataframe(x_test, preprocessor, target_col=None)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    test_loader = DataLoader(
+        test_ds, batch_size=cfg["train"]["batch_size"], shuffle=False, num_workers=data_cfg["num_workers"]
+    )
 
     predictions = trainer.predict(test_loader)
     submission = pd.DataFrame({target_col: predictions}, index=x_test.index)
