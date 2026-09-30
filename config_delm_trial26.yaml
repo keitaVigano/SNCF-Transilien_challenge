@@ -1,0 +1,51 @@
+# Best DELM Optuna trial (#26, val MAE=0.7143 at the tuning budget) from
+# models/optuna/20260929_232803, retrained here with the full epochs/patience
+# budget (not the reduced tuning one) -- same pattern as config_huber_trial25.yaml.
+
+seed: 42
+
+data:
+  x_train_path: x_train_final.csv
+  y_train_path: y_train_final_j5KGWWK.csv
+  x_test_path: x_test_final.csv
+  target_col: p0q0
+  categorical_cols: [gare]
+  numeric_cols: [arret, p2q0, p3q0, p4q0, p0q2, p0q3, p0q4]
+  date_col: date
+  use_date_features: true
+  val_fraction: 0.2
+  num_workers: 0
+
+model:
+  architecture: delm
+  embedding_dim: 8
+  delm_hidden_dims: [64]
+  delm_ridge_lambda: 7.871423590370023
+  activation: tanh
+  hidden_init: uniform
+  hidden_init_range: [-1.0, 1.0]
+
+train:
+  solver: sgd
+  batch_size: 4096
+  epochs: 150
+  lr: 0.01809923482416203
+  optimizer: adam
+  weight_decay: 1.1848347749380902e-05
+  ridge_lambda: 1.0
+  loss: huber
+  huber_beta: 0.29770480633741314
+  device: auto
+  early_stopping_patience: 25
+  use_tensorboard: true
+
+output:
+  models_dir: models
+  predictions_filename: predictions.csv
+
+tune:
+  n_trials: 30
+  epochs_per_trial: 60
+  early_stopping_patience_per_trial: 15
+  study_name: selm_tuning
+  fixed_loss: huber

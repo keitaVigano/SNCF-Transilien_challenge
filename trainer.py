@@ -41,6 +41,19 @@ class Trainer:
             return torch.optim.SGD(params, lr=self.cfg["lr"], weight_decay=self.cfg["weight_decay"])
         raise ValueError(f"Unknown optimizer '{self.cfg['optimizer']}'")
 
+    def _make_loss(self) -> nn.Module:
+        """Only used by fit_sgd: the closed_form solver fits Eq. (8), which
+        IS the normal equation for MSE, so it has no equivalent for huber/mae.
+        """
+        loss_name = self.cfg.get("loss", "mse")
+        if loss_name == "mse":
+            return nn.MSELoss()
+        if loss_name == "huber":
+            return nn.SmoothL1Loss(beta=self.cfg.get("huber_beta", 1.0))
+        if loss_name == "mae":
+            return nn.L1Loss()
+        raise ValueError(f"Unknown loss '{loss_name}', choose 'mse', 'huber' or 'mae'")
+
     def _to_device(self, x_num, x_cat, y=None):
         x_num = x_num.to(self.device)
         x_cat = {k: v.to(self.device) for k, v in x_cat.items()}
@@ -61,7 +74,7 @@ class Trainer:
 
     def fit_sgd(self, train_loader: DataLoader, val_loader: DataLoader) -> None:
         optimizer = self._make_optimizer()
-        loss_fn = nn.MSELoss()
+        loss_fn = self._make_loss()
 
         best_val_mae = float("inf")
         best_state = None

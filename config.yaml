@@ -22,9 +22,10 @@ data:
   num_workers: 0
 
 model:
-  embedding_dim: 8
-  hidden_dim: 2048
-  activation: tanh          # tanh | sigmoid | relu
+  # Best Optuna trial (#24, val MAE=0.6946) from models/optuna/20260921_232919.
+  embedding_dim: 16
+  hidden_dim: 256
+  activation: sigmoid       # tanh | sigmoid | relu
   hidden_init: uniform      # uniform | normal
   hidden_init_range: [-1.0, 1.0]   # bounds for uniform, std for normal
 
@@ -36,10 +37,13 @@ train:
   solver: sgd
   batch_size: 4096
   epochs: 150
-  lr: 0.003
+  lr: 0.012450579334097437
   optimizer: adam           # adam | sgd
-  weight_decay: 1.0e-4      # L2 regularization, matches lambda in Eq.(7)
+  weight_decay: 4.181043148886732e-05  # L2 regularization, matches lambda in Eq.(7)
   ridge_lambda: 1.0         # lambda used by the closed_form solver
+  loss: mae                 # mse | huber | mae -- only used by the sgd solver;
+                             # closed_form always solves Eq.(8), the MSE normal equation
+  huber_beta: 1.0           # only used when loss: huber (SmoothL1Loss threshold)
   device: auto              # auto | cpu | cuda
   early_stopping_patience: 25
   use_tensorboard: true      # also mirror metrics.csv into TensorBoard event files
@@ -57,3 +61,5 @@ tune:
   epochs_per_trial: 60
   early_stopping_patience_per_trial: 15
   study_name: selm_tuning
+  fixed_loss: huber  # null/omit to search mse|huber|mae freely; set to pin it
+                      # for every trial (still searches huber_beta when set to huber)

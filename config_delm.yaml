@@ -1,0 +1,55 @@
+# DELM (Deep Extreme Learning Machine) run -- Oneto et al. 2018, Section 3.2.
+# Separate file from config.yaml (which stays the current best SELM run) so
+# neither overwrites the other. See model.py:DELM for the architecture notes.
+
+seed: 42
+
+data:
+  x_train_path: x_train_final.csv
+  y_train_path: y_train_final_j5KGWWK.csv
+  x_test_path: x_test_final.csv
+  target_col: p0q0
+  categorical_cols: [gare]
+  numeric_cols: [arret, p2q0, p3q0, p4q0, p0q2, p0q3, p0q4]
+  date_col: date
+  use_date_features: true
+  val_fraction: 0.2
+  num_workers: 0
+
+model:
+  architecture: delm       # selm | delm
+  embedding_dim: 16
+  # Funnel of AE layers (Table 4 of the paper found h_i decreasing with
+  # depth on a much higher-dimensional feature space; ours is only
+  # ~24-39 dims after embeddings, so start much smaller).
+  delm_hidden_dims: [64, 32, 16]
+  delm_ridge_lambda: 1.0   # shared across all AE layers (see model.py:DELM docstring)
+  activation: sigmoid       # tanh | sigmoid | relu -- used by every AE layer + (unused) output
+  hidden_init: uniform      # uniform | normal
+  hidden_init_range: [-1.0, 1.0]
+
+train:
+  # closed_form is not supported for DELM (see model.py:DELM docstring) -- sgd only.
+  solver: sgd
+  batch_size: 4096
+  epochs: 150
+  lr: 0.012450579334097437
+  optimizer: adam
+  weight_decay: 4.181043148886732e-05
+  ridge_lambda: 1.0
+  loss: mae
+  huber_beta: 1.0
+  device: auto
+  early_stopping_patience: 25
+  use_tensorboard: true
+
+output:
+  models_dir: models
+  predictions_filename: predictions.csv
+
+tune:
+  n_trials: 30
+  epochs_per_trial: 60
+  early_stopping_patience_per_trial: 15
+  study_name: selm_tuning
+  fixed_loss: huber

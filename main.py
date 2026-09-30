@@ -1,6 +1,6 @@
-"""Orchestrates the SELM train-delay-prediction pipeline: load data, split,
-preprocess, train (closed-form ridge regression or SGD), evaluate, and
-predict on the held-out test set.
+"""Orchestrates the SELM/DELM train-delay-prediction pipeline: load data,
+split, preprocess, train (closed-form ridge regression or SGD), evaluate,
+and predict on the held-out test set.
 
 Usage:
     python main.py --config config.yaml
@@ -15,7 +15,7 @@ import pandas as pd
 from torch.utils.data import DataLoader
 
 from dataset import Preprocessor, TransilienDelayDataset, chronological_split
-from model import SELM
+from model import DELM, SELM
 from trainer import Trainer
 from utils import get_device, load_config, make_run_dir, set_seed, setup_logging
 
@@ -65,17 +65,31 @@ def build_loaders(
     return train_loader, val_loader
 
 
-def build_model(cfg: dict, preprocessor: Preprocessor) -> SELM:
+def build_model(cfg: dict, preprocessor: Preprocessor) -> SELM | DELM:
     model_cfg = cfg["model"]
-    return SELM(
-        numeric_dim=len(preprocessor.all_numeric_cols),
-        cardinalities=preprocessor.cardinalities_,
-        embedding_dim=model_cfg["embedding_dim"],
-        hidden_dim=model_cfg["hidden_dim"],
-        activation=model_cfg["activation"],
-        hidden_init=model_cfg["hidden_init"],
-        hidden_init_range=tuple(model_cfg["hidden_init_range"]),
-    )
+    architecture = model_cfg.get("architecture", "selm")
+    if architecture == "selm":
+        return SELM(
+            numeric_dim=len(preprocessor.all_numeric_cols),
+            cardinalities=preprocessor.cardinalities_,
+            embedding_dim=model_cfg["embedding_dim"],
+            hidden_dim=model_cfg["hidden_dim"],
+            activation=model_cfg["activation"],
+            hidden_init=model_cfg["hidden_init"],
+            hidden_init_range=tuple(model_cfg["hidden_init_range"]),
+        )
+    if architecture == "delm":
+        return DELM(
+            numeric_dim=len(preprocessor.all_numeric_cols),
+            cardinalities=preprocessor.cardinalities_,
+            embedding_dim=model_cfg["embedding_dim"],
+            hidden_dims=model_cfg["delm_hidden_dims"],
+            activation=model_cfg["activation"],
+            hidden_init=model_cfg["hidden_init"],
+            hidden_init_range=tuple(model_cfg["hidden_init_range"]),
+            ridge_lambda=model_cfg.get("delm_ridge_lambda", 1.0),
+        )
+    raise ValueError(f"Unknown architecture '{architecture}', choose 'selm' or 'delm'")
 
 
 def main(config_path: str) -> None:
@@ -95,6 +109,11 @@ def main(config_path: str) -> None:
     train_loader, val_loader = build_loaders(cfg, train_ds, val_ds)
 
     model = build_model(cfg, preprocessor)
+    if isinstance(model, DELM):
+        # No gradient-based alternative for the AE stack (Section 3.2): it is
+        # always fit once, in closed form, before any supervised training.
+        logger.info("Pretraining DELM's %d-layer autoencoder stack in closed form...", len(model.hidden_dims))
+        model.fit_representation(train_loader, device)
     trainer = Trainer(model, device, cfg["train"], run_dir)
 
     solver = cfg["train"]["solver"]
