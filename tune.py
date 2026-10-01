@@ -174,6 +174,6 @@ def main(config_path: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tune SELM hyperparameters with Optuna.")
-    parser.add_argument("--config", default="config.yaml", help="Path to the YAML config file.")
+    parser.add_argument("--config", default="config/config.yaml", help="Path to the YAML config file.")
     args = parser.parse_args()
     main(args.config)
