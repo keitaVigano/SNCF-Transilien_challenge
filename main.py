@@ -39,6 +39,24 @@ def load_datasets(cfg: dict) -> tuple[Preprocessor, TransilienDelayDataset, Tran
     y_train_full = pd.read_csv(data_cfg["y_train_path"], index_col=0)
     df = x_train_full.join(y_train_full)
 
+    # Optional: drop rows whose true delay is an extreme, one-off disruption
+    # (e.g. the 2023-11-10 network-wide event found by analysis/error_analysis.py
+    # -- |p0q0| up to 93 min, dwarfing the typical <2 min error, with nothing
+    # in the lag features signaling it in advance). Applied before the split,
+    # so it affects both train AND val: this is a "how good is the model on
+    # the learnable, non-disruption-day cases" run, not just a training-time
+    # robustness trick -- the reported val MAE/RMSE will no longer include
+    # those rows either.
+    max_abs_target = data_cfg.get("max_abs_target")
+    if max_abs_target is not None:
+        target_col = data_cfg["target_col"]
+        before = len(df)
+        df = df[df[target_col].abs() <= max_abs_target]
+        logger.info(
+            "Dropped %d/%d rows with |%s| > %s (max_abs_target filter)",
+            before - len(df), before, target_col, max_abs_target,
+        )
+
     train_df, val_df = chronological_split(df, data_cfg["date_col"], data_cfg["val_fraction"])
     logger.info("Train rows: %d, val rows: %d", len(train_df), len(val_df))
 
