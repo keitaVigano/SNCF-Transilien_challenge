@@ -222,3 +222,10 @@ __marimo__/
 
 # DSstore
 .DS_Store
+
+# Trained models (timestamped run folders)
+models/
+
+*.ipynb
+*.png
+*.jpg
