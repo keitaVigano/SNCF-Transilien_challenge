@@ -1,0 +1,60 @@
+# Configuration for the XGBoost gradient-boosting pipeline for train delay
+# prediction (SNCF Transilien challenge). Same data/task as the SELM/DELM
+# pipeline on feature/selm, different model family.
+
+seed: 42
+
+data:
+  x_train_path: x_train_final.csv
+  y_train_path: y_train_final_j5KGWWK.csv
+  x_test_path: x_test_final.csv
+  target_col: p0q0
+  # High-cardinality "train" id is intentionally excluded by default: it
+  # does not generalize across rows. Add it here if you want to try it
+  # anyway (XGBoost's native categorical support handles it fine either way).
+  categorical_cols: [gare]
+  numeric_cols: [arret, p2q0, p3q0, p4q0, p0q2, p0q3, p0q4]
+  date_col: date
+  use_date_features: true   # derive day-of-week (categorical) + is_weekend (numeric) from date_col
+  val_fraction: 0.2         # fraction of the *most recent* dates held out for validation
+  max_abs_target: 20        # drops extreme TRAIN-only outlier rows (val stays untouched); null to disable
+  use_target_encoding: true          # add smoothed, K-fold-on-train target-encoded <col>_te features
+                                      # for gare/dow alongside the native categorical columns
+  target_encoding_smoothing: 20.0    # m-estimate strength -- higher pulls rare categories toward the global mean
+  target_encoding_folds: 5           # K-fold count for leakage-safe encoding of TRAIN rows only
+
+model:
+  n_estimators: 2000        # generous upper bound -- early_stopping_rounds decides the real count
+  max_depth: 6
+  learning_rate: 0.05
+  subsample: 0.8
+  colsample_bytree: 0.8
+  min_child_weight: 1.0
+  reg_alpha: 0.0
+  reg_lambda: 1.0
+  gamma: 0.0
+  objective: reg:squarederror   # reg:squarederror | reg:absoluteerror | reg:pseudohubererror
+  huber_slope: 1.0               # only used when objective: reg:pseudohubererror
+  tree_method: hist
+  enable_categorical: true       # native categorical splits for gare/dow -- see dataset.py:FeatureBuilder
+  n_jobs: -1
+
+train:
+  early_stopping_rounds: 50
+  eval_metric: mae
+  use_tensorboard: true
+
+output:
+  models_dir: models
+  predictions_filename: predictions.csv
+
+# Used only by tune.py. Searches max_depth, learning_rate, subsample,
+# colsample_bytree, min_child_weight, reg_alpha, reg_lambda, gamma, and
+# objective (+ huber_slope when objective is reg:pseudohubererror) with
+# Optuna's TPE sampler; best combination written to
+# models/optuna/<run>/best_config.yaml.
+tune:
+  n_trials: 30
+  study_name: xgb_tuning
+  fixed_objective: null   # null to search all 3 objectives freely; set to pin one
+  use_tensorboard: false   # trials are numerous -- skip TB event files to save disk
