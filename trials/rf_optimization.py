@@ -4,6 +4,7 @@ import optuna
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error
 
+# leaderboard 81 vs 79
 # upload data
 x_train = pd.read_csv('data/x_train_final.csv', index_col=0)
 x_train.drop(columns=["Unnamed: 0"], inplace=True, errors="ignore")
@@ -15,10 +16,11 @@ df["target"] = y_train.iloc[:, 0].values
 
 df["dow"] = df["date"].dt.dayofweek
 df["month"] = df["date"].dt.month
-# df["is_weekend"] = df["dow"].isin([5, 6]).astype(int)
+
+
 # encoding stazione: frequency encoding (semplice, no leakage)
-# freq_gare = df["gare"].value_counts(normalize=True)
-# df["gare_freq"] = df["gare"].map(freq_gare)
+freq_gare = df["gare"].value_counts(normalize=True)
+df["gare_freq"] = df["gare"].map(freq_gare)
 
 #data split
 date_split = df["date"].quantile(0.8)
@@ -26,7 +28,7 @@ train_mask = df["date"] <= date_split
 
 feature_cols = [
     "arret", "p2q0", "p3q0", "p4q0", "p0q2", "p0q3", "p0q4",
-    "dow", "month"
+    "dow", "month", "gare_freq"
 ]
 
 X_tr, X_val = df.loc[train_mask, feature_cols], df.loc[~train_mask, feature_cols]
